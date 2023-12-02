@@ -63,10 +63,13 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>D:\Steam\steamapps\common\Nova-Life\Nova-Life_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CacheArea.cs" />
+    <Compile Include="DataBase\AlarmModel.cs" />
+    <Compile Include="DataBase\InterventionModel.cs" />
     <Compile Include="FoxAlarms.cs" />
+    <Compile Include="DataBase\LeManipulateurDeLaDonnee.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
