@@ -4,6 +4,7 @@ using Life.AreaSystem;
 using Life.BizSystem;
 using Life.CheckpointSystem;
 using Life.DB;
+using Life.InventorySystem;
 using Life.MainMenuSystem;
 using Life.Network;
 using Life.PermissionSystem;
@@ -244,11 +245,14 @@ namespace FoxAlarms
                     if (player.HasBiz())
                     {
                         if (SocietyConcerned.Contains(player.biz.Id))
+                        {
                             Nova.server.CreateInter(clientName,
                                 $"Alerte une alarme VeryFox à été délenché !",
                                 new Vector3(alarm.posX, alarm.posY, alarm.posZ),
                                 player.biz.Id,
                                 player);
+                            return;
+                        }
                     }
                 }
             }
@@ -292,7 +296,8 @@ namespace FoxAlarms
                     if (passwordEntered == "securite" && accessAlarmAuth == 1 && IsSecuritySociety(player))
                     {
                         MenuAlarmAuthentificated(player, alarm);
-                    } else
+                    }
+                    else
                     {
                         if (alarm.password == passwordEntered) // Si le code est bon
                         {
@@ -370,7 +375,7 @@ namespace FoxAlarms
                 })
                 .AddTabLine("Allumer l'alarme", (ui) =>
                 {
-                    player.Notify(alarmSystemName, "Vous avez activé votre alarme. Veuillez sortir afin de pas déclencher l'alarme", NotificationManager.Type.Info);
+                    player.Notify(alarmSystemName, "Vous avez activée votre alarme. Veuillez sortir afin de pas déclencher l'alarme", NotificationManager.Type.Info);
                     player.ClosePanel(ui);
                     alarm.status = 1;
                     LeManipulateurDeLaDonnee.UpdateAlarm(alarm);
@@ -496,7 +501,8 @@ namespace FoxAlarms
                 player.setup.StartCoroutine(removeTemporaryCoOwning(player, area));
 
                 SendWebhook(logDiscordSecret, player.GetFullName() + " est intervenu chez : " + alarm.name);
-            } else
+            }
+            else
             {
                 player.Notify(alarmSystemName, "Terrain non pris en charge par votre entreprise.", NotificationManager.Type.Error);
             }
@@ -533,7 +539,8 @@ namespace FoxAlarms
 
                 checkpoints.Clear();
                 player.Notify(alarmSystemName, "Alarme déplacé !", NotificationManager.Type.Info);
-            } else
+            }
+            else
             {
                 player.Notify(alarmSystemName, "Aucune alarme disponible à déplacer.", NotificationManager.Type.Warning);
             }
