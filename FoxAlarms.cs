@@ -1,11 +1,8 @@
 ﻿using FoxAlarms.DataBase;
 using Life;
 using Life.AreaSystem;
-using Life.BizSystem;
 using Life.CheckpointSystem;
 using Life.DB;
-using Life.InventorySystem;
-using Life.MainMenuSystem;
 using Life.Network;
 using Life.PermissionSystem;
 using Mirror;
@@ -13,41 +10,32 @@ using Newtonsoft.Json;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Data.SqlTypes;
 using System.IO;
 using System.Linq;
-using System.Media;
 using System.Net.Http;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using UnityEngine;
-using static System.Net.WebRequestMethods;
 using UIPanel = Life.UI.UIPanel;
 
 namespace FoxAlarms
 {
     public class FoxAlarms : Plugin
     {
+        private int AlarmPrice { get; set; }
+        private List<int> SocietyConcerned { get; set; }
+        private string messageNotifIntervention { get; set; }
+        private string logDiscordAdress { get; set; }
+        private string logDiscordSecret { get; set; }
+        private int accessAlarmAuth { get; set; }
 
-        public int AlarmPrice { get; set; }
-        public List<int> SocietyConcerned { get; set; }
-        public string messageNotifIntervention { get; set; }
-        public string logDiscordAdress { get; set; }
-        public string logDiscordSecret { get; set; }
-        public int accessAlarmAuth { get; set; }
+        private UIPanel menuAlarmPro;
+        private string alarmSystemName = "VeryFox v1.2";
 
-        public UIPanel menuAlarmPro;
-        public string alarmSystemName = "VeryFox v1.2";
+        private static string DbPath = "FoxAlarms/data.db";
 
-        public static string DbPath = "FoxAlarms/data.db";
-
-        public List<Intervention> interventions = new List<Intervention>();
-
-        public List<NCheckpoint> checkpoints = new List<NCheckpoint>();
+        private List<NCheckpoint> checkpoints = new List<NCheckpoint>();
 
         public FoxAlarms(IGameAPI api) : base(api)
         {
@@ -61,7 +49,7 @@ namespace FoxAlarms
 
             var configFilePath = Path.Combine(pluginsPath, "FoxAlarms/config.json");
 
-            Config configuration = ChargerConfiguration(configFilePath);
+            var configuration = ChargerConfiguration(configFilePath);
 
             AlarmPrice = configuration.AlarmPrice;
             SocietyConcerned = configuration.SecuritySociety;
@@ -74,35 +62,37 @@ namespace FoxAlarms
             NetworkAreaManager.instance.doors.Callback += Doors_Callback;
         }
 
-        private void Doors_Callback(SyncList<DoorState>.Operation op, int itemIndex, DoorState oldItem, DoorState newItem) // trigger door open
+        private void Doors_Callback(SyncList<DoorState>.Operation op, int itemIndex, DoorState oldItem,
+            DoorState newItem) // trigger door open
         {
-            InteractableDoor interactableDoor = LifeManager.instance.doors[newItem.guid];
-            if (!interactableDoor.isGate && interactableDoor.isLockable && !interactableDoor.isAutomaticDoor)
+            var interactableDoor = LifeManager.instance.doors[newItem.guid];
+            if (interactableDoor.isGate || !interactableDoor.isLockable || interactableDoor.isAutomaticDoor) return;
+            if (oldItem.isLocked == true && newItem.isLocked == false)
             {
-                if (oldItem.isLocked == true && newItem.isLocked == false)
-                {
-                    SendSignalArea((uint)LifeManager.instance.doors[newItem.guid].areaId);
-                }
+                SendSignalArea((uint)LifeManager.instance.doors[newItem.guid].areaId);
             }
         }
 
         private void SetupCommand()
         {
-            SChatCommand commandAlarmPro = new SChatCommand("/alarmPro", "Menu de gestion des alarmes pour professionnel.", "/alarmPro", (player, argsCmd) =>
-            {
-                SpawnMenuAlarmPro(player);
-            });
+            var commandAlarmPro = new SChatCommand("/alarmPro",
+                "Menu de gestion des alarmes pour professionnel.", "/alarmPro",
+                (player, argsCmd) => { SpawnMenuAlarmPro(player); });
 
-            SChatCommand creditCommand = new SChatCommand("/creditsFox", "Commande de crédit obligatoire du au coté OpenSource du plugins (Ne pas retirer)", "/creditsFox", (player, argCmd) =>
-            {
-                UIPanel panelCredit = new UIPanel("FoxAlarms developped by Fooxiie & Rémi (the modo), all right reserved", UIPanel.PanelType.Text);
-                panelCredit.text = "Ce plugin du métier sécurité a été développer par Fooxiie.";
-                panelCredit.AddButton("Fermer", (ui) =>
+
+            var creditCommand = new SChatCommand("/creditsFox",
+                "Commande de crédit obligatoire du au coté OpenSource du plugins (Ne pas retirer)", "/creditsFox",
+                (player, argCmd) =>
                 {
-                    player.ClosePanel(ui);
+                    var panelCredit =
+                        new UIPanel("FoxAlarms developped by Fooxiie & Rémi (the modo), all right reserved",
+                            UIPanel.PanelType.Text)
+                        {
+                            text = "Ce plugin du métier sécurité a été développer par Fooxiie."
+                        };
+                    panelCredit.AddButton("Fermer", (ui) => { player.ClosePanel(ui); });
+                    player.ShowPanelUI(panelCredit);
                 });
-                player.ShowPanelUI(panelCredit);
-            });
 
             commandAlarmPro.Register();
             creditCommand.Register();
@@ -131,24 +121,24 @@ namespace FoxAlarms
 
         private async void LoadAllChecKPoints(Player player)
         {
-            List<DataBase.AlarmModel> alarmModels = await LeManipulateurDeLaDonnee.GetAlarms();
+            var alarmModels = await LeManipulateurDeLaDonnee.GetAlarms();
             foreach (var item in alarmModels)
             {
                 RegisterCheckpoint(player, new Vector3(item.posX, item.posY, item.posZ));
             }
         }
 
-        static Config ChargerConfiguration(string cheminFichierConfig)
+        private static Config ChargerConfiguration(string cheminFichierConfig)
         {
-            string jsonConfig = System.IO.File.ReadAllText(cheminFichierConfig);
+            var jsonConfig = System.IO.File.ReadAllText(cheminFichierConfig);
             return JsonConvert.DeserializeObject<Config>(jsonConfig);
         }
 
         private async Task<Areas> WishAreaIAm(uint areaId)
         {
-            List<Areas> list = await (from m in LifeDB.db.Table<Areas>()
-                                      where m.AreaId == areaId
-                                      select m).ToListAsync();
+            var list = await (from m in LifeDB.db.Table<Areas>()
+                where m.AreaId == areaId
+                select m).ToListAsync();
             var areaInDB = list.First();
             return areaInDB;
         }
@@ -157,27 +147,37 @@ namespace FoxAlarms
         {
             if (player.biz.Bank >= AlarmPrice)
             {
-                UIPanel panelNameAlarm = new UIPanel("Nommez le destinataire de l'alarme", UIPanel.PanelType.Input);
-                panelNameAlarm.inputPlaceholder = "Nom prenom ou nom entreprise";
+                var panelNameAlarm = new UIPanel("Nommez le destinataire de l'alarme", UIPanel.PanelType.Input)
+                    {
+                        inputPlaceholder = "Nom prenom ou nom entreprise"
+                    };
                 panelNameAlarm.AddButton("Nommer", (ui) =>
                 {
-                    string inputText = ui.inputText;
+                    var inputText = ui.inputText;
 
                     // Display une image de work pour attendre
                     player.setup.TargetShowCenterText(alarmSystemName, "Vous installez une alarme..", 4);
                     player.biz.Bank -= AlarmPrice;
-                    player.Notify(alarmSystemName, "Installation de l'alarme effectué. Le prix a été facturé à votre entreprise.", NotificationManager.Type.Success);
+                    player.Notify(alarmSystemName,
+                        "Installation de l'alarme effectué. Le prix a été facturé à votre entreprise.",
+                        NotificationManager.Type.Success);
 
+                    var transform = player.setup.transform;
+                    var position = transform.position;
                     LeManipulateurDeLaDonnee.registerAlarm(player.setup.areaId,
-                        player.setup.transform.position.x,
-                        player.setup.transform.position.y,
-                        player.setup.transform.position.z,
+                        position.x,
+                        position.y,
+                        position.z,
                         inputText.Trim());
 
                     // Give le checkpoint à tous les gens autour dans le cas ou ils sont de la secu ou du terrain
                     foreach (var aroundPlayer in Nova.server.Players)
                     {
-                        RegisterCheckpoint(aroundPlayer, new Vector3(player.setup.transform.position.x, player.setup.transform.position.y, player.setup.transform.position.z));
+                        var transform1 = player.setup.transform;
+                        var position1 = transform1.position;
+                        RegisterCheckpoint(aroundPlayer,
+                            new Vector3(position1.x, position1.y,
+                                position1.z));
                     }
                 });
 
@@ -185,7 +185,9 @@ namespace FoxAlarms
             }
             else
             {
-                player.Notify(alarmSystemName, "Impossible d'installer l'alarme, votre entreprise ne dispose pas des fonds néccéssaire.", NotificationManager.Type.Error);
+                player.Notify(alarmSystemName,
+                    "Impossible d'installer l'alarme, votre entreprise ne dispose pas des fonds néccéssaire.",
+                    NotificationManager.Type.Error);
             }
         }
 
@@ -198,12 +200,13 @@ namespace FoxAlarms
                     return true;
                 }
             }
+
             return false;
         }
 
         private async void SendSignalArea(uint areaId)
         {
-            AlarmModel alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)areaId);
+            var alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)areaId);
 
             if (alarm != null && alarm.status == 1)
             {
@@ -220,47 +223,40 @@ namespace FoxAlarms
 
         private async void ReportIntrusion(int areaId, AlarmModel alarm)
         {
-            AlarmModel AlarmUpdated = await LeManipulateurDeLaDonnee.GetAlarm((int)areaId);
-            if (AlarmUpdated.status != 0)
+            var alarmUpdated = await LeManipulateurDeLaDonnee.GetAlarm((int)areaId);
+            if (alarmUpdated.status == 0) return;
+            var list = await (from m in LifeDB.db.Table<Areas>()
+                where m.AreaId == areaId
+                select m).ToListAsync();
+            
+            var areaInDB = list.First();
+
+            var permissions = areaInDB.Permissions;
+
+            var ownershipData = JsonConvert.DeserializeObject<OwnershipData>(permissions);
+
+            var proprio = await LifeDB.FetchCharacter(ownershipData.Owner.CharacterId);
+
+            var clientName = alarm.name;
+
+            await SendWebhook(logDiscordAdress, $"{messageNotifIntervention} {clientName}");
+
+            SendSms(proprio, clientName);
+
+            foreach (var player in Nova.server.Players.Where(player => player.HasBiz()).Where(player => SocietyConcerned.Contains(player.biz.Id)))
             {
-                List<Areas> list = await (from m in LifeDB.db.Table<Areas>()
-                                          where m.AreaId == areaId
-                                          select m).ToListAsync();
-                var areaInDB = list.First();
-
-                string permissions = areaInDB.Permissions;
-
-                OwnershipData ownershipData = JsonConvert.DeserializeObject<OwnershipData>(permissions);
-
-                var proprio = await LifeDB.FetchCharacter(ownershipData.Owner.CharacterId);
-
-                var clientName = alarm.name;
-
-                SendWebhook(logDiscordAdress, $"{messageNotifIntervention} {clientName}");
-
-                SendSMS(proprio, clientName);
-
-                foreach (Player player in Nova.server.Players)
-                {
-                    if (player.HasBiz())
-                    {
-                        if (SocietyConcerned.Contains(player.biz.Id))
-                        {
-                            Nova.server.CreateInter(clientName,
-                                $"Alerte une alarme VeryFox à été délenché !",
-                                new Vector3(alarm.posX, alarm.posY, alarm.posZ),
-                                player.biz.Id,
-                                player);
-                            return;
-                        }
-                    }
-                }
+                Nova.server.CreateInter(clientName,
+                    $"Alerte une alarme VeryFox à été délenché !",
+                    new Vector3(alarm.posX, alarm.posY, alarm.posZ),
+                    player.biz.Id,
+                    player);
+                return;
             }
         }
 
-        static async Task SendWebhook(string webhookUrl, string content)
+        private static async Task SendWebhook(string webhookUrl, string content)
         {
-            using (HttpClient client = new HttpClient())
+            using (var client = new HttpClient())
             {
                 var payload = new
                 {
@@ -280,48 +276,47 @@ namespace FoxAlarms
             }
         }
 
-        public void RegisterCheckpoint(Player player, Vector3 victor)
+        private void RegisterCheckpoint(Player player, Vector3 victor)
         {
-            NCheckpoint checkpointAlarm = new NCheckpoint(player.netId, victor, async (checkpoint) =>
+            var checkpointAlarm = new NCheckpoint(player.netId, victor, async (checkpoint) =>
             {
-                AlarmModel alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)player.setup.areaId);
+                var alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)player.setup.areaId);
 
-                int tentative = 2;
+                var tentative = 2;
 
-                UIPanel askPassword = new UIPanel("Entrer le code de l'alarme", UIPanel.PanelType.Input)
-                .AddButton("Confirmer", (action) =>
-                {
-                    string passwordEntered = action.inputText;
-
-                    if (passwordEntered == "securite" && accessAlarmAuth == 1 && IsSecuritySociety(player))
+                var askPassword = new UIPanel("Entrer le code de l'alarme", UIPanel.PanelType.Input)
+                    .AddButton("Confirmer", (action) =>
                     {
-                        MenuAlarmAuthentificated(player, alarm);
-                    }
-                    else
-                    {
-                        if (alarm.password == passwordEntered) // Si le code est bon
+                        var passwordEntered = action.inputText;
+
+                        if (passwordEntered == "securite" && accessAlarmAuth == 1 && IsSecuritySociety(player))
                         {
                             MenuAlarmAuthentificated(player, alarm);
                         }
                         else
                         {
-                            tentative -= 1;
-
-                            if (tentative == 0)
+                            if (alarm.password == passwordEntered) // Si le code est bon
                             {
-                                MakeAlarmRingForPlayer(player);
+                                MenuAlarmAuthentificated(player, alarm);
                             }
                             else
                             {
-                                player.Notify(alarmSystemName, $"Mauvais code ! X_X il te reste {tentative} essais !", NotificationManager.Type.Error);
+                                tentative -= 1;
+
+                                if (tentative == 0)
+                                {
+                                    MakeAlarmRingForPlayer(player);
+                                }
+                                else
+                                {
+                                    player.Notify(alarmSystemName,
+                                        $"Mauvais code ! X_X il te reste {tentative} essais !",
+                                        NotificationManager.Type.Error);
+                                }
                             }
                         }
-                    }
-                })
-                .AddButton("Retour", (action) =>
-                {
-                    player.ClosePanel(action);
-                });
+                    })
+                    .AddButton("Retour", (action) => { player.ClosePanel(action); });
 
                 player.ShowPanelUI(askPassword);
             });
@@ -331,51 +326,51 @@ namespace FoxAlarms
         }
 
         #region Menus
+
         private void SpawnMenuAlarmPro(Player player)
         {
-            if (IsSecuritySociety(player))
-            {
-                menuAlarmPro = new UIPanel($"FoxAlarm", UIPanel.PanelType.Tab)
-                                    .AddTabLine($"Installer une alarme ({AlarmPrice})", (ui) =>
-                                    {
-                                        player.ClosePanel(ui);
+            if (!IsSecuritySociety(player)) return;
+            menuAlarmPro = new UIPanel($"FoxAlarm", UIPanel.PanelType.Tab)
+                .AddTabLine($"Installer une alarme ({AlarmPrice})", (ui) =>
+                {
+                    player.ClosePanel(ui);
 
-                                        CreateAlarm(player);
-                                    })
-                                    .AddTabLine("Déplacer l'alarme", (ui) =>
-                                    {
-                                        MooveAlarmPosition(player);
-                                        player.ClosePanel(ui);
-                                    })
-                                    .AddTabLine("Intervenir sur site", (ui) =>
-                                    {
-                                        InterventionOnSite(player);
-                                        player.ClosePanel(ui);
-                                    })
-                                    .AddButton("Fermer", (ui) =>
-                                    {
-                                        player.ClosePanel(ui);
-                                    })
-                                    .AddButton("Sélectionner", (ui) =>
-                                    {
-                                        ui.SelectTab();
-                                    });
+                    CreateAlarm(player);
+                })
+                .AddTabLine("Déplacer l'alarme", (ui) =>
+                {
+                    MooveAlarmPosition(player);
+                    player.ClosePanel(ui);
+                })
+                .AddTabLine("Intervenir sur site", (ui) =>
+                {
+                    InterventionOnSite(player);
+                    player.ClosePanel(ui);
+                })
+                .AddButton("Fermer", (ui) => { player.ClosePanel(ui); })
+                .AddButton("Sélectionner", (ui) => { ui.SelectTab(); });
 
-                player.ShowPanelUI(menuAlarmPro);
-            }
+            player.ShowPanelUI(menuAlarmPro);
         }
 
         private void MenuAlarmAuthentificated(Player player, AlarmModel alarm)
         {
-            UIPanel onPointAlarmPanel = new UIPanel(alarmSystemName, UIPanel.PanelType.Tab);
+            var onPointAlarmPanel = new UIPanel(alarmSystemName, UIPanel.PanelType.Tab);
             onPointAlarmPanel
-                .AddTabLine("Status : " + (alarm.status == 1 ? "<color=#6aa84f>Activé</color>" : "<color=#fb4039>Désactivé</color>"), (ui) =>
-                {
-                    player.Notify(alarmSystemName, "Votre alarme est : " + (alarm.status == 1 ? "Activé" : "Désactivé"));
-                })
+                .AddTabLine(
+                    "Status : " + (alarm.status == 1
+                        ? "<color=#6aa84f>Activé</color>"
+                        : "<color=#fb4039>Désactivé</color>"),
+                    (ui) =>
+                    {
+                        player.Notify(alarmSystemName,
+                            "Votre alarme est : " + (alarm.status == 1 ? "Activé" : "Désactivé"));
+                    })
                 .AddTabLine("Allumer l'alarme", (ui) =>
                 {
-                    player.Notify(alarmSystemName, "Vous avez activée votre alarme. Veuillez sortir afin de pas déclencher l'alarme", NotificationManager.Type.Info);
+                    player.Notify(alarmSystemName,
+                        "Vous avez activée votre alarme. Veuillez sortir afin de pas déclencher l'alarme",
+                        NotificationManager.Type.Info);
                     player.ClosePanel(ui);
                     alarm.status = 1;
                     LeManipulateurDeLaDonnee.UpdateAlarm(alarm);
@@ -388,18 +383,9 @@ namespace FoxAlarms
                     LeManipulateurDeLaDonnee.UpdateAlarm(alarm);
                     player.ClosePanel(ui);
                 })
-                .AddTabLine("Modifier le code", (ui) =>
-                {
-                    EditAlarmCode(player, alarm);
-                })
-                .AddButton("Fermer", (ui) =>
-                {
-                    player.ClosePanel(ui);
-                })
-                .AddButton("Sélectionner", (ui) =>
-                {
-                    ui.SelectTab();
-                });
+                .AddTabLine("Modifier le code", (ui) => { EditAlarmCode(player, alarm); })
+                .AddButton("Fermer", player.ClosePanel)
+                .AddButton("Sélectionner", (ui) => { ui.SelectTab(); });
 
             onPointAlarmPanel.subtitle = "Developed by Fooxiie & RémiGDV (the modo)";
 
@@ -414,42 +400,41 @@ namespace FoxAlarms
                     player.ClosePanel(ui);
                 });
                 onPointAlarmPanel.AddTabLine("Test l'alarme", (ui) =>
-                {
-
-                    SendWebhook(logDiscordAdress, "Un agent fait un test d'alarme au terrain : " + alarm.name);
-                    player.ClosePanel(ui);
-                })
-                .AddTabLine("Modifier le nom", (ui) =>
-                {
-                    player.ClosePanel(ui);
-                    UIPanel panelNameAlarm = new UIPanel("Nommez le destinataire de l'alarme", UIPanel.PanelType.Input);
-                    panelNameAlarm.inputPlaceholder = "Nom prenom ou nom entreprise";
-                    panelNameAlarm.AddButton("Nommer", (subui) =>
                     {
+                        SendWebhook(logDiscordAdress, "Un agent fait un test d'alarme au terrain : " + alarm.name);
+                        player.ClosePanel(ui);
+                    })
+                    .AddTabLine("Modifier le nom", (ui) =>
+                    {
+                        player.ClosePanel(ui);
+                        var panelNameAlarm =
+                            new UIPanel("Nommez le destinataire de l'alarme", UIPanel.PanelType.Input)
+                                {
+                                    inputPlaceholder = "Nom prenom ou nom entreprise"
+                                };
+                        panelNameAlarm.AddButton("Nommer", (subui) =>
+                        {
+                            var inputText = subui.inputText;
 
-                        string inputText = subui.inputText;
+                            if (inputText == null) return;
+                            alarm.name = inputText;
 
-                        alarm.name = inputText;
+                            LeManipulateurDeLaDonnee.UpdateAlarm(alarm);
 
-                        LeManipulateurDeLaDonnee.UpdateAlarm(alarm);
+                            player.ClosePanel(subui);
+                        });
 
-                        player.ClosePanel(subui);
+                        player.ShowPanelUI(panelNameAlarm);
                     });
-
-                    player.ShowPanelUI(panelNameAlarm);
-                });
             }
 
             player.ShowPanelUI(onPointAlarmPanel);
         }
 
-        private void EditAlarmCode(Player player, AlarmModel alarm)
+        private static void EditAlarmCode(Player player, AlarmModel alarm)
         {
-            UIPanel editPassword = new UIPanel("Modification du code de l'alarme", UIPanel.PanelType.Input)
-                .AddButton("Fermer", (ui) =>
-                {
-                    player.ClosePanel(ui);
-                })
+            var editPassword = new UIPanel("Modification du code de l'alarme", UIPanel.PanelType.Input)
+                .AddButton("Fermer", player.ClosePanel)
                 .AddButton("Valider", (ui) =>
                 {
                     var code = ui.inputText;
@@ -459,14 +444,17 @@ namespace FoxAlarms
                         alarm.password = code;
                         LeManipulateurDeLaDonnee.UpdateAlarm(alarm);
                     }
+
                     player.ClosePanel(ui);
                 });
             editPassword.inputPlaceholder = "Code à 4 chiffres";
             player.ShowPanelUI(editPassword);
         }
+
         #endregion
 
         #region Ring Alarm
+
         private async void MakeAlarmRingForPlayer(Player player)
         {
             player.setup.StartCoroutine(CallAlarmFor(player));
@@ -474,23 +462,24 @@ namespace FoxAlarms
 
         IEnumerator CallAlarmFor(Player player)
         {
-            for (int i = 0; i < 10; i++)
+            for (var i = 0; i < 10; i++)
             {
                 player.setup.TargetPlayClairon(50);
 
                 yield return new WaitForSeconds(0.5f);
             }
         }
+
         #endregion
 
         private async void InterventionOnSite(Player player)
         {
             var targetAreaID = player.setup.areaId;
-            AlarmModel alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)targetAreaID);
+            var alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)targetAreaID);
 
             if (alarm != null)
             {
-                LifeArea area = Nova.a.areas.Where((x) => x.areaId == targetAreaID).First();
+                var area = Nova.a.areas.First(x => x.areaId == targetAreaID);
 
                 area.AddCoOwner(new Entity
                 {
@@ -500,40 +489,42 @@ namespace FoxAlarms
 
                 player.setup.StartCoroutine(removeTemporaryCoOwning(player, area));
 
-                SendWebhook(logDiscordSecret, player.GetFullName() + " est intervenu chez : " + alarm.name);
+                await SendWebhook(logDiscordSecret, player.GetFullName() + " est intervenu chez : " + alarm.name);
             }
             else
             {
-                player.Notify(alarmSystemName, "Terrain non pris en charge par votre entreprise.", NotificationManager.Type.Error);
+                player.Notify(alarmSystemName, "Terrain non pris en charge par votre entreprise.",
+                    NotificationManager.Type.Error);
             }
         }
 
         IEnumerator removeTemporaryCoOwning(Player player, LifeArea area)
         {
             yield return new WaitForSeconds(300f);
-            LifeArea newArea = Nova.a.areas.Where((x) => x.areaId == area.areaId).First();
-            foreach (var coOwner in newArea.permissions.coOwners)
+            var newArea = Nova.a.areas.First(x => x.areaId == area.areaId);
+            foreach (var coOwner in newArea.permissions.coOwners.Where(coOwner => coOwner.characterId == player.character.Id))
             {
-                if (coOwner.characterId == player.character.Id)
-                {
-                    newArea.DeleteCoOwner(coOwner);
-                }
+                newArea.DeleteCoOwner(coOwner);
             }
         }
 
         private async void MooveAlarmPosition(Player player)
         {
-            AlarmModel alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)player.setup.areaId);
+            var alarm = await LeManipulateurDeLaDonnee.GetAlarm((int)player.setup.areaId);
 
             if (alarm != null)
             {
-                alarm.posX = player.setup.transform.position.x;
-                alarm.posY = player.setup.transform.position.y;
-                alarm.posZ = player.setup.transform.position.z;
+                var transform = player.setup.transform;
+                var position = transform.position;
+                alarm.posX = position.x;
+                alarm.posY = position.y;
+                alarm.posZ = position.z;
 
                 LeManipulateurDeLaDonnee.UpdateAlarm(alarm);
 
-                RegisterCheckpoint(player, new Vector3(player.setup.transform.position.x, player.setup.transform.position.y, player.setup.transform.position.z));
+                RegisterCheckpoint(player,
+                    new Vector3(player.setup.transform.position.x, position.y,
+                        position.z));
 
                 ReWriteCheckPoints();
 
@@ -542,7 +533,8 @@ namespace FoxAlarms
             }
             else
             {
-                player.Notify(alarmSystemName, "Aucune alarme disponible à déplacer.", NotificationManager.Type.Warning);
+                player.Notify(alarmSystemName, "Aucune alarme disponible à déplacer.",
+                    NotificationManager.Type.Warning);
             }
         }
 
@@ -554,56 +546,49 @@ namespace FoxAlarms
                 {
                     p.DestroyCheckpoint(myCheckpoint);
                 }
+
                 LoadAllChecKPoints(p);
             }
         }
 
-        private async void SendSMS(Characters proprio, string target)
+        private async void SendSms(Characters proprio, string target)
         {
+            await LifeDB.SendSMS(proprio.Id, alarmSystemName, proprio.PhoneNumber, Nova.UnixTimeNow(),
+                $"Votre alarme a été activé, votre fournisseur a été averti pour le terrain de {target}.");
 
-            LifeDB.SendSMS(proprio.Id, alarmSystemName, proprio.PhoneNumber, Nova.UnixTimeNow(), $"Votre alarme a été activé, votre fournisseur a été averti pour le terrain de {target}.");
-
-            foreach (var player in Nova.server.GetAllInGamePlayers())
+            foreach (var player in Nova.server.GetAllInGamePlayers().Where(player => player.character.Id == proprio.Id))
             {
-                if (player.character.Id == proprio.Id)
-                {
-                    player.setup.TargetUpdateSMS();
-                    player.Notify(alarmSystemName, "Vous avez reçu une nouvelle alerte par SMS !", NotificationManager.Type.Info);
-                }
+                player.setup.TargetUpdateSMS();
+                player.Notify(alarmSystemName, "Vous avez reçu une nouvelle alerte par SMS !",
+                    NotificationManager.Type.Info);
             }
         }
     }
 
     #region class Data
+
     public class OwnershipData
     {
-        [JsonProperty("owner")]
-        public OwnerData Owner { get; set; }
+        [JsonProperty("owner")] public OwnerData Owner { get; set; }
 
-        [JsonProperty("coOwners")]
-        public CoOwnerData[] CoOwners { get; set; }
-
+        [JsonProperty("coOwners")] public CoOwnerData[] CoOwners { get; set; }
     }
 
     public class OwnerData
     {
-        [JsonProperty("groupId")]
-        public int GroupId { get; set; }
+        [JsonProperty("groupId")] public int GroupId { get; set; }
 
-        [JsonProperty("characterId")]
-        public int CharacterId { get; set; }
+        [JsonProperty("characterId")] public int CharacterId { get; set; }
     }
 
     public class CoOwnerData
     {
-        [JsonProperty("groupId")]
-        public int GroupId { get; set; }
+        [JsonProperty("groupId")] public int GroupId { get; set; }
 
-        [JsonProperty("characterId")]
-        public int CharacterId { get; set; }
+        [JsonProperty("characterId")] public int CharacterId { get; set; }
     }
 
-    class Config
+    internal class Config
     {
         public int AlarmPrice { get; set; }
         public List<int> SecuritySociety { get; set; }
@@ -612,5 +597,6 @@ namespace FoxAlarms
         public string logDiscordSecret { get; set; }
         public int accessAlarmAuth { get; set; }
     }
+
     #endregion
 }
