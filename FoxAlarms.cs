@@ -16,6 +16,8 @@ using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Life.UI;
+using MyMenu.Entities;
 using UnityEngine;
 using UIPanel = Life.UI.UIPanel;
 
@@ -24,7 +26,6 @@ namespace FoxAlarms
     public class FoxAlarms : Plugin
     {
         private int AlarmPrice { get; set; }
-        private List<int> SocietyConcerned { get; set; }
         private string messageNotifIntervention { get; set; }
         private string logDiscordAdress { get; set; }
         private string logDiscordSecret { get; set; }
@@ -36,6 +37,7 @@ namespace FoxAlarms
         private static string DbPath = "FoxAlarms/data.db";
 
         private List<NCheckpoint> checkpoints = new List<NCheckpoint>();
+        private Section _section;
 
         public FoxAlarms(IGameAPI api) : base(api)
         {
@@ -52,7 +54,6 @@ namespace FoxAlarms
             var configuration = ChargerConfiguration(configFilePath);
 
             AlarmPrice = configuration.AlarmPrice;
-            SocietyConcerned = configuration.SecuritySociety;
             messageNotifIntervention = configuration.messageNotifIntervention;
             logDiscordAdress = configuration.logDiscordAdress;
             logDiscordSecret = configuration.logDiscordSecret;
@@ -60,6 +61,12 @@ namespace FoxAlarms
             SetupCommand();
 
             NetworkAreaManager.instance.doors.Callback += Doors_Callback;
+
+            _section = new Section(Section.GetSourceName(), "VeryFox", "v2.0", "Fooxiie", onlyAdmin: true);
+            Action<UIPanel> action = ui => SpawnMenuAlarmPro(_section.GetPlayer(ui));
+
+            _section.Line = new UITabLine("AucuneIncidence", action);
+            _section.Insert();
         }
 
         private void Doors_Callback(SyncList<DoorState>.Operation op, int itemIndex, DoorState oldItem,
@@ -101,16 +108,6 @@ namespace FoxAlarms
         private async void InitDataBase()
         {
             await LeManipulateurDeLaDonnee.Init(Path.Combine(pluginsPath, DbPath));
-        }
-
-        public override void OnPlayerInput(Player player, KeyCode keyCode, bool onUI)
-        {
-            base.OnPlayerInput(player, keyCode, onUI);
-
-            if (keyCode == KeyCode.P && !onUI)
-            {
-                SpawnMenuAlarmPro(player);
-            }
         }
 
         public override void OnPlayerSpawnCharacter(Player player, NetworkConnection conn, Characters character)
@@ -193,15 +190,7 @@ namespace FoxAlarms
 
         private bool IsSecuritySociety(Player player)
         {
-            if (player.HasBiz())
-            {
-                if (SocietyConcerned.Contains(player.biz.Id))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return player.HasBiz() && _section.BizIdAllowed.Contains(player.biz.Id);
         }
 
         private async void SendSignalArea(uint areaId)
@@ -243,7 +232,7 @@ namespace FoxAlarms
 
             SendSms(proprio, clientName);
 
-            foreach (var player in Nova.server.Players.Where(player => player.HasBiz()).Where(player => SocietyConcerned.Contains(player.biz.Id)))
+            foreach (var player in Nova.server.Players.Where(player => player.HasBiz()).Where(player => _section.BizIdAllowed.Contains(player.biz.Id)))
             {
                 Nova.server.CreateInter(clientName,
                     $"Alerte une alarme VeryFox à été délenché !",
@@ -329,7 +318,6 @@ namespace FoxAlarms
 
         private void SpawnMenuAlarmPro(Player player)
         {
-            if (!IsSecuritySociety(player)) return;
             menuAlarmPro = new UIPanel($"FoxAlarm", UIPanel.PanelType.Tab)
                 .AddTabLine($"Installer une alarme ({AlarmPrice})", (ui) =>
                 {
