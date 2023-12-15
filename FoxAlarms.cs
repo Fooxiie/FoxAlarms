@@ -555,9 +555,16 @@ namespace FoxAlarms
 
         private async void SendSms(Characters proprio, string target)
         {
-            await LifeDB.SendSMS(proprio.Id, alarmSystemName, proprio.PhoneNumber, Nova.UnixTimeNow(),
+            await LifeDB.SendSMS(proprio.Id, "70", proprio.PhoneNumber, Nova.UnixTimeNow(),
                 $"Votre alarme a été activé, votre fournisseur a été averti pour le terrain de {target}.");
 
+            var contacts = await LifeDB.FetchContacts(proprio.Id);
+            var contactPub = contacts.contacts.Where(contact => contact.number == "70").ToList();
+            if (contactPub.Count == 0)
+            {
+                await LifeDB.CreateContact(proprio.Id, "70", alarmSystemName);
+            }
+            
             foreach (var player in Nova.server.GetAllInGamePlayers().Where(player => player.character.Id == proprio.Id))
             {
                 player.setup.TargetUpdateSMS();
