@@ -107,6 +107,18 @@ namespace FoxAlarms
 
         private async void InitDataBase()
         {
+            var pluginsDirectory = Path.Combine(pluginsPath, "FoxAlarms");
+            if (!Directory.Exists(pluginsDirectory))
+            {
+                Directory.CreateDirectory(pluginsDirectory);
+            }
+
+            if (!File.Exists(Path.Combine(pluginsDirectory, "config.json")))
+            {
+                File.WriteAllText(Path.Combine(pluginsDirectory, "config.json"),
+                    "{\n    \"AlarmPrice\": 1000,\n    \"messageNotifIntervention\": \"Alerte ! Une alarme a été déclenché chez\",\n    \"logDiscordSecret\": \"\",\n    \"logDiscordAdress\": \"\",\n    \"accessAlarmAuth\": 1\n}");
+            }
+
             await LeManipulateurDeLaDonnee.Init(Path.Combine(pluginsPath, DbPath));
         }
 
@@ -145,9 +157,9 @@ namespace FoxAlarms
             if (player.biz.Bank >= AlarmPrice)
             {
                 var panelNameAlarm = new UIPanel("Nommez le destinataire de l'alarme", UIPanel.PanelType.Input)
-                    {
-                        inputPlaceholder = "Nom prenom ou nom entreprise"
-                    };
+                {
+                    inputPlaceholder = "Nom prenom ou nom entreprise"
+                };
                 panelNameAlarm.AddButton("Nommer", (ui) =>
                 {
                     var inputText = ui.inputText;
@@ -217,7 +229,7 @@ namespace FoxAlarms
             var list = await (from m in LifeDB.db.Table<Areas>()
                 where m.AreaId == areaId
                 select m).ToListAsync();
-            
+
             var areaInDB = list.First();
 
             var permissions = areaInDB.Permissions;
@@ -232,7 +244,8 @@ namespace FoxAlarms
 
             SendSms(proprio, clientName);
 
-            foreach (var player in Nova.server.Players.Where(player => player.HasBiz()).Where(player => _section.BizIdAllowed.Contains(player.biz.Id)))
+            foreach (var player in Nova.server.Players.Where(player => player.HasBiz())
+                         .Where(player => _section.BizIdAllowed.Contains(player.biz.Id)))
             {
                 Nova.server.CreateInter(clientName,
                     $"Alerte une alarme VeryFox à été délenché !",
@@ -397,9 +410,9 @@ namespace FoxAlarms
                         player.ClosePanel(ui);
                         var panelNameAlarm =
                             new UIPanel("Nommez le destinataire de l'alarme", UIPanel.PanelType.Input)
-                                {
-                                    inputPlaceholder = "Nom prenom ou nom entreprise"
-                                };
+                            {
+                                inputPlaceholder = "Nom prenom ou nom entreprise"
+                            };
                         panelNameAlarm.AddButton("Nommer", (subui) =>
                         {
                             var inputText = subui.inputText;
@@ -490,7 +503,8 @@ namespace FoxAlarms
         {
             yield return new WaitForSeconds(300f);
             var newArea = Nova.a.areas.First(x => x.areaId == area.areaId);
-            foreach (var coOwner in newArea.permissions.coOwners.Where(coOwner => coOwner.characterId == player.character.Id))
+            foreach (var coOwner in newArea.permissions.coOwners.Where(coOwner =>
+                         coOwner.characterId == player.character.Id))
             {
                 newArea.DeleteCoOwner(coOwner);
             }
