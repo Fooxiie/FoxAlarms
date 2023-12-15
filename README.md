@@ -1,6 +1,9 @@
 # FoxAlarms (Public name : VeryFox)
  A new job for your Nova Life Amboise server, setup a society for this job, install alarms, get notification if someone enter in your house.
 
+# For more information go to this Discord :
+[Lien Discord](https://discord.gg/D7s9dTKnWB)
+
 # Installation
 Copy all the files and folder in the plugins folder of your server, set the variable in the config.json file in FoxAlarms folder and it's done
 
