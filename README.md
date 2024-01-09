@@ -1,4 +1,4 @@
-# FoxAlarms (Public name : VeryFox)
+# FoxAlarms (Nova-Life plugin)
  A new job for your Nova Life Amboise server, setup a society for this job, install alarms, get notification if someone enter in your house.
 
 # For more information go to this Discord :
